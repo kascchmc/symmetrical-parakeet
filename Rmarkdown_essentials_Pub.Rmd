@@ -1,0 +1,586 @@
+---
+title: "<center> Polr1a RNAseq <center>"
+author: "<center> Weaver Lab<center><br>"
+date: "<center> _`r Sys.Date()`_ <center>"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    theme: yeti
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_sections: true
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+library(rmarkdown)
+library(tinytex)
+library(knitr)
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+```
+
+## Introduction
+
+RNAseq anaylsis introduction. This reproducible and dynamic report was created using Rmarkdown and the [Knitr package](https://yihui.name/knitr/), and summarizes the basic code and outputs (plots, tables, etc) produced during the course.
+
+------------------------------------------------------------------------
+
+## R packages used
+
+A variety of R packages was used for this analysis. All graphics and data wrangling were handled using the [tidyverse suite of packages](https://www.tidyverse.org/). All packages used are available from the Comprehensive R Archive Network (CRAN), Bioconductor.org, or Github.
+
+------------------------------------------------------------------------
+
+## Read mapping
+
+### Aligning raw reads with Kallisto
+
+Raw reads were mapped to the mouse reference transcriptome using [Kallisto](https://pachterlab.github.io/kallisto/), version 0.46.2. The quality of raw reads, as well as the results of Kallisto mapping are summarized in [this summary report](put%20multiqc%20report%20here) generated using [fastqc](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) and [multiqc](https://multiqc.info/).
+
+------------------------------------------------------------------------
+
+### Importing count data into R
+
+After read mapping with Kallisto, [TxImport](https://bioconductor.org/packages/release/bioc/html/tximport.html) was used to read kallisto outputs into the R environment. Annotation data from Biomart was used to summarize data from transcript-level to gene-level.
+
+```{r step 1 - TxImport}
+library(tidyverse) # provides access to Hadley Wickham's collection of R packages for data science, which we will use throughout the course
+library(tximport) # package for getting Kallisto results into R
+library(ensembldb) #helps deal with ensembl
+library(EnsDb.Mmusculus.v79) #replace with your organism-specific database package
+targets <- read_tsv("studydesign.txt")# read in your study design
+path <- file.path(targets$sample, "abundance.tsv") # set file paths to your mapped data
+Tx <- transcripts(EnsDb.Mmusculus.v79, columns=c("tx_id", "gene_name"))
+Tx <- as_tibble(Tx)
+Tx <- dplyr::rename(Tx, target_id = tx_id)
+Tx <- dplyr::select(Tx, "target_id", "gene_name")
+Txi_gene <- tximport(path, 
+                     type = "kallisto", 
+                     tx2gene = Tx, 
+                     txOut = FALSE, #determines whether your data represented at transcript or gene level
+                     countsFromAbundance = "lengthScaledTPM",
+                     ignoreTxVersion = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Preprocessing
+
+### Impact of filtering and normalization
+
+```{r step2 - dataWrangling}
+library(tidyverse)
+library(edgeR)
+library(matrixStats)
+library(cowplot)
+
+sampleLabels <- targets$sample
+myDGEList <- DGEList(Txi_gene$counts)
+log2.cpm <- cpm(myDGEList, log=TRUE)
+
+log2.cpm.df <- as_tibble(log2.cpm, rownames = "geneID")
+colnames(log2.cpm.df) <- c("geneID", sampleLabels)
+log2.cpm.df.pivot <- pivot_longer(log2.cpm.df, # dataframe to be pivoted
+                                  cols = Polr_2048_1:Polr_2138_7, # column names to be stored as a SINGLE variable
+                                  names_to = "samples", # name of that new variable (column)
+                                  values_to = "expression") # name of new variable (column) storing all the values (data)
+
+p1 <- ggplot(log2.cpm.df.pivot) +
+  aes(x=samples, y=expression, fill=samples) +
+  geom_violin(trim = FALSE, show.legend = FALSE) +
+  stat_summary(fun = "median", 
+               geom = "point", 
+               shape = 95, 
+               size = 10, 
+               color = "black", 
+               show.legend = FALSE) +
+  labs(y="log2 expression", x = "sample",
+       title="Log2 Counts per Million (CPM)",
+       subtitle="unfiltered, non-normalized",
+       caption=paste0("produced on ", Sys.time())) +
+  theme_bw() +
+  scale_x_discrete(labels = c("2048.1", "2048.11", "2048.2", "2048.3", "2138.1", "2138.2", "2138.3", "2138.4", "2138.6", "2138.7")) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5))
+
+cpm <- cpm(myDGEList)
+keepers <- rowSums(cpm>1)>=2 #user defined, be sure to adjust this cutoff for the number of samples in the smallest group of comparison.
+myDGEList.filtered <- myDGEList[keepers,]
+
+log2.cpm.filtered <- cpm(myDGEList.filtered, log=TRUE)
+log2.cpm.filtered.df <- as_tibble(log2.cpm.filtered, rownames = "geneID")
+colnames(log2.cpm.filtered.df) <- c("geneID", sampleLabels)
+log2.cpm.filtered.df.pivot <- pivot_longer(log2.cpm.filtered.df, # dataframe to be pivoted
+                                           cols = Polr_2048_1:Polr_2138_7, # column names to be stored as a SINGLE variable
+                                           names_to = "samples", # name of that new variable (column)
+                                           values_to = "expression") # name of new variable (column) storing all the values (data)
+
+p2 <- ggplot(log2.cpm.filtered.df.pivot) +
+  aes(x=samples, y=expression, fill=samples) +
+  geom_violin(trim = FALSE, show.legend = FALSE) +
+  stat_summary(fun = "median", 
+               geom = "point", 
+               shape = 95, 
+               size = 10, 
+               color = "black", 
+               show.legend = FALSE) +
+  labs(y="log2 expression", x = "sample",
+       title="Log2 Counts per Million (CPM)",
+       subtitle="filtered, non-normalized",
+       caption=paste0("produced on ", Sys.time())) +
+  theme_bw() +
+  scale_x_discrete(labels = c("2048.1", "2048.11", "2048.2", "2048.3", "2138.1", "2138.2", "2138.3", "2138.4", "2138.6", "2138.7")) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5))
+
+myDGEList.filtered.norm <- calcNormFactors(myDGEList.filtered, method = "TMM")
+log2.cpm.filtered.norm <- cpm(myDGEList.filtered.norm, log=TRUE)
+log2.cpm.filtered.norm.df <- as_tibble(log2.cpm.filtered.norm, rownames = "geneID")
+colnames(log2.cpm.filtered.norm.df) <- c("geneID", sampleLabels)
+log2.cpm.filtered.norm.df.pivot <- pivot_longer(log2.cpm.filtered.norm.df, # dataframe to be pivoted
+                                                cols = Polr_2048_1:Polr_2138_7, # column names to be stored as a SINGLE variable
+                                                names_to = "samples", # name of that new variable (column)
+                                                values_to = "expression") # name of new variable (column) storing all the values (data)
+
+p3 <- ggplot(log2.cpm.filtered.norm.df.pivot) +
+  aes(x=samples, y=expression, fill=samples) +
+  geom_violin(trim = FALSE, show.legend = FALSE) +
+  stat_summary(fun = "median", 
+               geom = "point", 
+               shape = 95, 
+               size = 10, 
+               color = "black", 
+               show.legend = FALSE) +
+  labs(y="log2 expression", x = "sample",
+       title="Log2 Counts per Million (CPM)",
+       subtitle="filtered, TMM normalized",
+       caption=paste0("produced on ", Sys.time())) +
+  theme_bw() +
+  scale_x_discrete(labels = c("2048.1", "2048.11", "2048.2", "2048.3", "2138.1", "2138.2", "2138.3", "2138.4", "2138.6", "2138.7")) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5))
+
+plot_grid(p1, p2, p3, labels = c('A', 'B', 'C'), label_size = 12)
+```
+
+Filtering was carried out to remove lowly expressed genes. Genes with less than 1 count per million (CPM) in at least 2 or more samples filtered out. This reduced the number of genes from `r nrow(myDGEList)` to `r nrow(myDGEList.filtered)`.
+
+------------------------------------------------------------------------
+
+### table of filtered and normalized data
+
+```{r step 3 - multivariate part 1 (data table)}
+library(tidyverse)
+library(DT)
+library(gt)
+library(plotly)
+
+mydata.df <- log2.cpm.filtered.norm.df %>% 
+  mutate(wt.AVG = (Polr_2048_1 + Polr_2048_3 + Polr_2138_1 + Polr_2138_2 + Polr_2138_4)/5,
+         gt.AVG = (Polr_2048_2 + Polr_2048_11)/2,
+         cf.AVG = (Polr_2138_3 + Polr_2138_6 + Polr_2138_7)/3,
+         #now make columns comparing each of the averages above that you're interested in
+         LogFCgtUP = (gt.AVG - wt.AVG),
+         LogFCcfUP = (cf.AVG - wt.AVG)) %>%
+         #LogFCgt_cf = (gt.AVG - cf.AVG)) %>%
+  mutate_if(is.numeric, round, 2)
+
+datatable(mydata.df[,c(1,15:16)], 
+          extensions = c('KeyTable', "FixedHeader"), 
+          filter = 'top',
+          options = list(keys = TRUE, 
+                         searchHighlight = TRUE, 
+                         pageLength = 10, 
+                         lengthMenu = c("10", "25", "50", "100")))
+
+```
+
+The table shown above includes expression data for `r nrow(myDGEList.filtered)` genes. You can sort and search the data directly from the table.
+
+------------------------------------------------------------------------
+
+## PCA plot
+
+```{r step 3 - multivariate part 2 (PCA plot)}
+group <- targets$group
+group <- factor(group)
+geno <- targets$geno
+geno <- factor(geno)
+geno_simp <- targets$geno_simp
+geno_simp <- factor(geno_simp)
+
+pca.res <- prcomp(t(log2.cpm.filtered.norm), scale.=F, retx=T)
+pc.var<-pca.res$sdev^2 # sdev^2 captures these eigenvalues from the PCA result
+pc.per<-round(pc.var/sum(pc.var)*100, 1) 
+pca.res.df <- as_tibble(pca.res$x)
+pca.plot <- ggplot(pca.res.df) +
+  aes(x=PC1, y=PC2, label=sampleLabels, color = geno_simp) +
+  geom_point(size=4) +
+  #stat_ellipse() +
+  xlab(paste0("PC1 (",pc.per[1],"%",")")) + 
+  ylab(paste0("PC2 (",pc.per[2],"%",")")) +
+  labs(title="PCA plot",
+       caption=paste0("produced on ", Sys.time())) +
+  coord_fixed() +
+  theme_bw() +
+  scale_color_discrete(name = NULL, labels = c("C1562F", "Null", "Wildtype"))
+
+pca.plot
+
+
+```
+
+------------------------------------------------------------------------
+
+## Volcano plot
+
+```{r step 5 - diffGenes part 1 (volcano plot)}
+library(tidyverse)
+library(limma)
+library(edgeR) 
+library(gt)
+library(DT) 
+library(plotly) 
+
+geno_simp <- factor(targets$geno_simp)
+geno_simp <- relevel(geno_simp, "wt") #sets reference level
+design <- model.matrix(~ geno_simp +0)
+colnames(design) <- levels(geno_simp)
+
+v.DEGList.filtered.norm <- voom(myDGEList.filtered.norm, design, plot = FALSE)
+fit <- lmFit(v.DEGList.filtered.norm, design)
+contrast.matrix <- makeContrasts(ko = gt - wt, 
+                                 cf_ms = cf - wt, 
+                                 #gt_cf = gt - cf,
+                                 levels=design)
+
+fits <- contrasts.fit(fit, contrast.matrix)
+ebFit <- eBayes(fits)
+
+myTopHits1 <- topTable(ebFit, adjust ="BH", coef=1, number=500, sort.by="logFC")
+myTopHits2 <- topTable(ebFit, adjust ="BH", coef=2, number=500, sort.by="logFC")
+
+
+write.csv(myTopHits1, "mytophitsgt.csv")
+
+myTopHits1.df <- myTopHits1 %>%
+  as_tibble(rownames = "geneID")
+myTopHits2.df <- myTopHits2 %>%
+  as_tibble(rownames = "geneID")
+
+
+vplot1 <- ggplot(myTopHits1.df) +
+  aes(y=-log10(adj.P.Val), x=logFC, text = paste("Symbol:", geneID)) +
+  annotate("rect", xmin = 1, xmax = 8, ymin = -log10(0.1), ymax = 4.5, alpha=.2, fill="#BE684D") +
+  annotate("rect", xmin = -1, xmax = -8, ymin = -log10(0.1), ymax = 4.5, alpha=.2, fill="#2C467A") +       geom_point(size=2) +
+  labs(title="Volcano plot",
+       subtitle = "GT - WT",
+       caption=paste0("produced on ", Sys.time())) +
+  theme_bw()
+
+vplot1
+
+
+vplot2 <- ggplot(myTopHits2.df) +
+  aes(y=-log10(adj.P.Val), x=logFC, text = paste("Symbol:", geneID)) +
+  annotate("rect", xmin = 1, xmax = 8, ymin = -log10(0.1), ymax = 3, alpha=.2, fill="#BE684D") +
+  annotate("rect", xmin = -1, xmax = -8, ymin = -log10(0.1), ymax = 3, alpha=.2, fill="#2C467A") +
+  geom_point(size=2) +
+  labs(title="Volcano plot",
+       subtitle = "CF - WT",
+       caption=paste0("produced on ", Sys.time())) +
+  theme_bw()
+
+vplot2
+
+
+
+```
+
+------------------------------------------------------------------------
+
+## Table of DEGs
+
+To identify differentially expressed genes, precision weights were first applied to each gene based on its mean-variance relationship using [VOOM](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2014-15-2-r29), then data was normalized using the [TMM method](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2010-11-3-r25) in [EdgeR](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2796818/). Linear modeling and bayesian stats were employed via [Limma](https://academic.oup.com/nar/article/43/7/e47/2414268) to find genes that were up- or down-regulated by 2-fold or more, with a false-discovery rate (FDR) of 0.1.
+
+```{r step 5 - diffGenes part 2 (DEG table)}
+results <- decideTests(ebFit, method="global", adjust.method="BH", p.value=0.1, lfc=1.0)
+colnames(v.DEGList.filtered.norm$E) <- sampleLabels
+diffGenes <- v.DEGList.filtered.norm$E[results[,1] !=0 | results[,2] !=0,]
+diffGenes.df <- as_tibble(diffGenes, rownames = "geneID")
+datatable(diffGenes.df, 
+          extensions = c('KeyTable', "FixedHeader"), 
+          caption = 'Table 1: DEGs in Polr1a',
+          options = list(keys = TRUE, searchHighlight = TRUE, pageLength = 10, lengthMenu = c("10", "25", "50", "100"))) %>%
+  formatRound(columns=c(2:11), digits=2)
+```
+
+------------------------------------------------------------------------
+
+## Heatmaps and modules
+
+Pearson correlation was used to cluster **`r nrow(diffGenes)`** differentially expressed genes, which were then represented as heatmap with the data scaled by Zscore for each row.
+
+```{r step 6 - modules part 1 (heatmap)}
+library(tidyverse)
+library(gplots)
+library(RColorBrewer)
+library(ggpubr)
+library(ggplot2)
+
+myheatcolors <- rev(brewer.pal(name="RdBu", n=11))
+colnames(diffGenes) <- targets$geno_simp #Change names to geno_simp
+clustRows <- hclust(as.dist(1-cor(t(diffGenes), method="pearson")), method="complete") #cluster rows by pearson correlation
+clustColumns <- hclust(as.dist(1-cor(diffGenes, method="spearman")), method="complete")
+module.assign <- cutree(clustRows, k=4)
+module.color <- rainbow(length(unique(module.assign)), start=0.1, end=0.9) 
+module.color <- module.color[as.vector(module.assign)] 
+heatmap.2(diffGenes, 
+          Rowv=as.dendrogram(clustRows), 
+          Colv=as.dendrogram(clustColumns),
+          RowSideColors=module.color,
+          col=myheatcolors, scale='row', 
+          #labRow=NA, #remove labRow argument for gene labels
+          density.info="none", trace="none",  
+          cexRow=1, cexCol=1, margins=c(5,15))
+```
+
+```{r step 6 - modules part 2 (upregulated genes)}
+modulePick1 <- 1 
+myModule1 <- diffGenes[names(module.assign[module.assign %in% modulePick1]),] 
+hrsub1 <- hclust(as.dist(1-cor(t(myModule1), method="pearson")), method="complete")
+
+modulePick2 <- 2 
+myModule2 <- diffGenes[names(module.assign[module.assign %in% modulePick2]),] 
+hrsub2 <- hclust(as.dist(1-cor(t(myModule2), method="pearson")), method="complete") 
+
+modulePick3 <- 3 
+myModule3 <- diffGenes[names(module.assign[module.assign %in% modulePick3]),] 
+hrsub3 <- hclust(as.dist(1-cor(t(myModule3), method="pearson")), method="complete")
+
+modulePick4 <- 4 
+myModule4 <- diffGenes[names(module.assign[module.assign %in% modulePick4]),] 
+myModule4 <- t(myModule4)
+rownames(myModule4) = c("Rpl34")
+
+h1 <- heatmap.2(myModule1, 
+          Rowv=as.dendrogram(hrsub1), 
+          col=myheatcolors, scale="row", 
+          density.info="none", trace="none", 
+          RowSideColors=module.color[module.assign%in%modulePick1], margins=c(8,20))
+
+h2 <- heatmap.2(myModule2, 
+          Rowv=as.dendrogram(hrsub2),
+          col=myheatcolors, scale="row", 
+          density.info="none", trace="none", 
+          RowSideColors=module.color[module.assign%in%modulePick2], margins=c(8,20))
+
+h3 <- heatmap.2(myModule3, 
+          Rowv=as.dendrogram(hrsub3),
+          col=myheatcolors, scale="row", 
+          density.info="none", trace="none", 
+          RowSideColors=module.color[module.assign%in%modulePick3], margins=c(8,20))
+
+
+
+```
+
+## GO enrichment
+
+GO enrichment for differentially expressed genes
+
+```{r step 7 - functionalEnrichment part 1 (gostplot for upregulated genes)}
+library(tidyverse)
+library(limma)
+library(gplots) #for heatmaps
+library(DT) #interactive and searchable tables of our GSEA results
+library(GSEABase) #functions and methods for Gene Set Enrichment Analysis
+library(Biobase) #base functions for bioconductor; required by GSEABase
+library(GSVA) #Gene Set Variation Analysis, a non-parametric and unsupervised method for estimating variation of gene set enrichment across samples.
+library(gprofiler2) #tools for accessing the GO enrichment results using g:Profiler web resources
+#You need this package "Patchwork" from https://github.com/thomasp85/patchwork , there is another Patchwork package that will not work with the following packages, and it may be installed by them, by mistake. 
+library(clusterProfiler) # provides a suite of tools for functional enrichment analysis
+library(msigdbr) # access to msigdb collections directly within R
+library(enrichplot) # great for making the standard GSEA enrichment plots
+
+gost.res_up1 <- gost(rownames(myModule1), organism = "mmusculus", correction_method = "fdr")
+gostplot(gost.res_up1, interactive = F, capped = F) #set interactive=FALSE to get plot for publications
+
+
+gost.res_up2 <- gost(rownames(myModule2), organism = "mmusculus", correction_method = "fdr")
+gostplot(gost.res_up2, interactive = F, capped = F) #set interactive=FALSE to get plot for publications
+
+gost.res_up3 <- gost(rownames(myModule3), organism = "mmusculus", correction_method = "fdr")
+gostplot(gost.res_up3, interactive = F, capped = F) #set interactive=FALSE to get plot for publications
+
+gost.res_up4 <- gost(rownames(myModule4), organism = "mmusculus", correction_method = "fdr")
+gostplot(gost.res_up4, interactive = F, capped = T) #set interactive=FALSE to get plot for publications
+
+
+gtdown.datatable <- gost.res_up1$result %>%
+  mutate(geno = "gt", change = "down")
+
+gtup.datatable <- gost.res_up2$result %>%
+  mutate(geno = "gt", change = "up")
+
+cfdown.datatable <- gost.res_up4$result %>%
+  mutate(geno = "cf", change = "down")
+
+cfup.datatable <- gost.res_up3$result %>%
+  mutate(geno = "cf", change = "up")
+
+all.datatable <- bind_rows(gtup.datatable, gtdown.datatable, cfup.datatable, cfdown.datatable, id = NULL)
+
+selected <- c("GO:0021879", "GO:0140110", "GO:0072332","REAC:R-MMU-72312")
+
+select.table <- filter(all.datatable, term_id %in% selected) %>%
+  mutate(log_pv = case_when(
+    change == "down"  ~ log10(p_value),
+    change == "up"    ~ -(log10(p_value)))) %>%
+  mutate(term_name = fct_reorder(term_name, log_pv))
+
+ggplot(select.table) +
+  geom_point(aes(x = geno, y = term_name, size = intersection_size, color = log_pv)) +
+  scale_colour_gradientn(breaks = c(2, 0, -6, -12),  labels = c(2, 0, -6, -12), name = "log10(p-adj)", colours = c("blue", "white", "red"), values = scales::rescale(c(3, 0.5, 0, -1.0, -13))) +
+  scale_size(breaks = c(1, 3, 9), range = c(4, 10), name = "Genes/GO Term") +
+  labs(y = NULL, title = bquote(paste("GO Anaylsis of E12 Polr1a;"~"Foxg1"^"Cre/+"))) +
+  scale_x_discrete(name = NULL, labels = c(bquote(paste("Polr1a"^"C1562F/+")), bquote(paste("Polr1a"^"tm1d/+")))) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 1))
+
+
+
+
+```
+
+Heatmaps of Selected GO Enrichment
+
+```{r}
+library(tidyverse)
+library(ComplexHeatmap)
+library(RColorBrewer)
+library(gplots)
+library(stringr)
+library(patchwork)
+
+myheatcolors <- rev(brewer.pal(name="RdBu", n=11))
+
+gene_order <- c("Bcl11b", "Dlx1", "Dlx2", "Foxg1", 
+                          "Lhx6", "Lhx8", "Nkx2-1", 
+                          "Dlx5", "Slc32a1", "Sox8", "Cdkn1a", 
+                          "Eda2r", "Phlda3", "Ccng1", "Rpl34")
+
+select.instersection <- filter(diffGenes.df, geneID %in% c("Bcl11b", "Dlx1", "Dlx2", "Foxg1", 
+                                                           "Lhx6", "Lhx8", "Nkx2-1", 
+                                                           "Dlx5", "Slc32a1", "Sox8", "Cdkn1a", 
+                                                           "Eda2r", "Phlda3", "Ccng1", "Rpl34")) %>%
+  arrange(factor(geneID, levels = c("Bcl11b", "Dlx1", "Dlx2", "Foxg1", 
+                                              "Lhx6", "Lhx8", "Nkx2-1", 
+                                              "Dlx5", "Slc32a1", "Sox8", "Cdkn1a", 
+                                              "Eda2r", "Phlda3", "Ccng1", "Rpl34"))) %>%
+  data.frame(row.names = 1)
+
+hmall <- as.matrix(select.instersection)
+colnames(hmall) <- targets$geno_simp
+
+
+hm1 <- filter(select.instersection, row.names(select.instersection) %in% c("Bcl11b","Dlx1","Dlx2","Foxg1","Lhx6","Lhx8","Nkx2-1")) %>%
+  as.matrix()
+colnames(hm1) <- targets$geno_simp 
+
+
+hm2 <- filter(select.instersection, row.names(select.instersection) %in% c("Bcl11b","Dlx1","Dlx2","Dlx5","Foxg1","Lhx6","Nkx2-1","Slc32a1")) %>%
+  as.matrix()
+colnames(hm2) <- targets$geno_simp
+
+
+hm3 <- filter(select.instersection, row.names(select.instersection) %in% c("Bcl11b","Dlx1","Dlx2","Dlx5","Foxg1","Lhx6","Lhx8","Nkx2-1","Sox8")) %>%
+  as.matrix()
+colnames(hm3) <- targets$geno_simp
+
+
+hm4 <- filter(select.instersection, row.names(select.instersection) %in% c("Cdkn1a","Eda2r","Phlda3")) %>%
+  as.matrix()
+colnames(hm4) <- targets$geno_simp
+
+
+hm5 <- filter(select.instersection, row.names(select.instersection) %in% c("Ccng1","Cdkn1a")) %>%
+  as.matrix()
+colnames(hm5) <- targets$geno_simp
+
+
+
+hm1map <- heatmap.2(hm1, 
+          col=myheatcolors, scale="row", 
+          density.info="none", trace="none", 
+          margins=c(4,8),
+          rowsep = c(),
+          ylab = "Forebrain Neuron Differentiation",
+          cexRow = 1.0
+          )
+
+hm2map <- heatmap.2(hm2, 
+                    col=myheatcolors, scale="row", 
+                    density.info="none", trace="none", 
+                    margins=c(4,8),
+                    rowsep = c(),
+                    ylab = "telencephalon development",
+                    cexRow = 1.0
+                    )
+
+hm3map <- heatmap.2(hm3, 
+                    col=myheatcolors, scale="row", 
+                    density.info="none", trace="none", 
+                    margins=c(4,8),
+                    rowsep = c(),
+                    ylab = "Transcription Regulator Activity",
+                    cexRow = 1.0
+                    )
+
+
+hm4map <- heatmap.2(hm4, 
+                    col=myheatcolors, scale="row", 
+                    density.info="none", trace="none", 
+                    margins=c(4,8),
+                    rowsep = c(),
+                    ylab = str_wrap("Intrinsic Apoptotic Signaling Pathway by p53 Class Mediator", width = 40),
+                    cexRow = 1.0
+                    )
+
+
+hm5map <- heatmap.2(hm5, 
+                    col=myheatcolors, scale="row", 
+                    density.info="none", trace="none", 
+                    margins=c(4,8),
+                    rowsep = c(),
+                    ylab = "p53 signaling pathway", 
+                    cexRow = 1.0
+                    )
+
+
+
+
+
+```
+
+------------------------------------------------------------------------
+
+## Conclusions
+
+Describe the results in your own words. Some things to think about:
+
+-   What are the key takeaways from the analysis?
+-   What types of analyses would you want to do next?
+-   Based on your analysis, are there any wet-lab experiments would might priortize?
+-   How could you expand on or otherwise enhance this Rmarkdown report?
+
+## Session info
+
+The output from running 'sessionInfo' is shown below and details all packages and version necessary to reproduce the results in this report.
+
+```{r session info}
+sessionInfo()
+```

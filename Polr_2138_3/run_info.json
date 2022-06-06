@@ -1,0 +1,13 @@
+{
+	"n_targets": 117486,
+	"n_bootstraps": 0,
+	"n_processed": 22125482,
+	"n_pseudoaligned": 18793530,
+	"n_unique": 7217490,
+	"p_pseudoaligned": 84.9,
+	"p_unique": 32.6,
+	"kallisto_version": "0.46.2",
+	"index_version": 10,
+	"start_time": "Mon Nov 15 14:44:11 2021",
+	"call": "kallisto quant -i mus_musculus.cdna.all.index -o Polr_2138_3 -t 6 Polr_2138_3_1.fq.gz Polr_2138_3_2.fq.gz"
+}
