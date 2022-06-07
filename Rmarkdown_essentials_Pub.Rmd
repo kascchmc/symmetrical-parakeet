@@ -27,13 +27,13 @@ knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
 
 ## Introduction
 
-RNAseq anaylsis introduction. This reproducible and dynamic report was created using Rmarkdown and the [Knitr package](https://yihui.name/knitr/), and summarizes the basic code and outputs (plots, tables, etc) produced during the course.
+This reproducible and dynamic report was created using Rmarkdown and the [Knitr package](https://yihui.name/knitr/), and displays code and outputs produced during analysis. This report was created following the [DIYtranscriptomics](https://journals.asm.org/doi/10.1128/mBio.01214-21) pipeline.
 
 ------------------------------------------------------------------------
 
 ## R packages used
 
-A variety of R packages was used for this analysis. All graphics and data wrangling were handled using the [tidyverse suite of packages](https://www.tidyverse.org/). All packages used are available from the Comprehensive R Archive Network (CRAN), Bioconductor.org, or Github.
+A variety of R packages was used for this analysis. All packages used are listed at the end of this report under Session Info. All packages used are available from the Comprehensive R Archive Network (CRAN), Bioconductor.org, or Github.
 
 ------------------------------------------------------------------------
 
@@ -41,7 +41,7 @@ A variety of R packages was used for this analysis. All graphics and data wrangl
 
 ### Aligning raw reads with Kallisto
 
-Raw reads were mapped to the mouse reference transcriptome using [Kallisto](https://pachterlab.github.io/kallisto/), version 0.46.2. The quality of raw reads, as well as the results of Kallisto mapping are summarized in [this summary report](put%20multiqc%20report%20here) generated using [fastqc](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) and [multiqc](https://multiqc.info/).
+Raw reads were mapped to the mouse reference transcriptome using [Kallisto](https://pachterlab.github.io/kallisto/), version 0.46.2. The quality of raw reads, as well as the results of Kallisto mapping are summarized in [this summary report](https://github.com/kascchmc/symmetrical-parakeet/blob/main/multiqc_report.html) generated using [fastqc](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) and [multiqc](https://multiqc.info/). 
 
 ------------------------------------------------------------------------
 
