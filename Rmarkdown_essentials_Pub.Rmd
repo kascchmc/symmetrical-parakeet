@@ -1,6 +1,6 @@
 ---
-title: "<center> Polr1a RNAseq <center>"
-author: "<center> Weaver Lab<center><br>"
+title: "<center> RNAseq Analysis of E12 Polr1a; Foxg1^Cre/+^ <center>"
+author: "<center> Weaver Lab <center><br>"
 date: "<center> _`r Sys.Date()`_ <center>"
 output:
   html_document:
@@ -33,7 +33,7 @@ This reproducible and dynamic report was created using Rmarkdown and the [Knitr 
 
 ## R packages used
 
-A variety of R packages was used for this analysis. All packages used are listed at the end of this report under Session Info. All packages used are available from the Comprehensive R Archive Network (CRAN), Bioconductor.org, or Github.
+A variety of R packages was used for this analysis. All packages used are listed at the end of this report under Session Info. All packages used are available from the Comprehensive R Archive Network (CRAN), Bioconductor, or Github.
 
 ------------------------------------------------------------------------
 
@@ -41,7 +41,7 @@ A variety of R packages was used for this analysis. All packages used are listed
 
 ### Aligning raw reads with Kallisto
 
-Raw reads were mapped to the mouse reference transcriptome using [Kallisto](https://pachterlab.github.io/kallisto/), version 0.46.2. The quality of raw reads, as well as the results of Kallisto mapping are summarized in [this summary report](https://github.com/kascchmc/symmetrical-parakeet/blob/main/multiqc_report.html) generated using [fastqc](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) and [multiqc](https://multiqc.info/). 
+Raw reads were mapped to the mouse reference transcriptome using [Kallisto](https://pachterlab.github.io/kallisto/), version 0.46.2. Quality control of raw reads, as well as the results of Kallisto mapping are summarized in this [multiqc summary report](https://github.com/kascchmc/symmetrical-parakeet/blob/main/multiqc_report.html) generated using [fastqc](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) and [multiqc](https://multiqc.info/). 
 
 ------------------------------------------------------------------------
 
@@ -166,7 +166,7 @@ p3 <- ggplot(log2.cpm.filtered.norm.df.pivot) +
 plot_grid(p1, p2, p3, labels = c('A', 'B', 'C'), label_size = 12)
 ```
 
-Filtering was carried out to remove lowly expressed genes. Genes with less than 1 count per million (CPM) in at least 2 or more samples filtered out. This reduced the number of genes from `r nrow(myDGEList)` to `r nrow(myDGEList.filtered)`.
+Expressed genes with less than 1 count per million (CPM) in at least 2 or more samples were filtered out. This reduced the number of genes from `r nrow(myDGEList)` to `r nrow(myDGEList.filtered)`. Genes were then normalized using the [TMM method](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2010-11-3-r25).
 
 ------------------------------------------------------------------------
 
@@ -183,9 +183,9 @@ mydata.df <- log2.cpm.filtered.norm.df %>%
          gt.AVG = (Polr_2048_2 + Polr_2048_11)/2,
          cf.AVG = (Polr_2138_3 + Polr_2138_6 + Polr_2138_7)/3,
          #now make columns comparing each of the averages above that you're interested in
-         LogFCgtUP = (gt.AVG - wt.AVG),
-         LogFCcfUP = (cf.AVG - wt.AVG)) %>%
-         #LogFCgt_cf = (gt.AVG - cf.AVG)) %>%
+         NullLogFC = (gt.AVG - wt.AVG),
+         C1562FLogFC = (cf.AVG - wt.AVG)) %>%
+         
   mutate_if(is.numeric, round, 2)
 
 datatable(mydata.df[,c(1,15:16)], 
@@ -198,7 +198,7 @@ datatable(mydata.df[,c(1,15:16)],
 
 ```
 
-The table shown above includes expression data for `r nrow(myDGEList.filtered)` genes. You can sort and search the data directly from the table.
+The table shown above includes expression data for `r nrow(myDGEList.filtered)` genes. Genes are listed in total log fold change (LogFC).   
 
 ------------------------------------------------------------------------
 
@@ -264,8 +264,6 @@ myTopHits1 <- topTable(ebFit, adjust ="BH", coef=1, number=500, sort.by="logFC")
 myTopHits2 <- topTable(ebFit, adjust ="BH", coef=2, number=500, sort.by="logFC")
 
 
-write.csv(myTopHits1, "mytophitsgt.csv")
-
 myTopHits1.df <- myTopHits1 %>%
   as_tibble(rownames = "geneID")
 myTopHits2.df <- myTopHits2 %>%
@@ -304,7 +302,7 @@ vplot2
 
 ## Table of DEGs
 
-To identify differentially expressed genes, precision weights were first applied to each gene based on its mean-variance relationship using [VOOM](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2014-15-2-r29), then data was normalized using the [TMM method](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2010-11-3-r25) in [EdgeR](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2796818/). Linear modeling and bayesian stats were employed via [Limma](https://academic.oup.com/nar/article/43/7/e47/2414268) to find genes that were up- or down-regulated by 2-fold or more, with a false-discovery rate (FDR) of 0.1.
+To identify differentially expressed genes, precision weights were first applied to each gene using [VOOM](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2014-15-2-r29), then data was normalized using the TMM method in [EdgeR](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2796818/). Linear modeling and bayesian stats were employed via [Limma](https://academic.oup.com/nar/article/43/7/e47/2414268) to find genes that were up- or down-regulated by 2-fold or more, with a false-discovery rate (FDR) less than or equal to 0.1.
 
 ```{r step 5 - diffGenes part 2 (DEG table)}
 results <- decideTests(ebFit, method="global", adjust.method="BH", p.value=0.1, lfc=1.0)
@@ -322,7 +320,7 @@ datatable(diffGenes.df,
 
 ## Heatmaps and modules
 
-Pearson correlation was used to cluster **`r nrow(diffGenes)`** differentially expressed genes, which were then represented as heatmap with the data scaled by Zscore for each row.
+Pearson correlation was used to cluster **`r nrow(diffGenes)`** differentially expressed genes, which were then represented as heatmap with the data scaled by Zscore for each row. The first heatmap shows all differentially expressed genes, and the following heatmaps show each module. The last module is not shown, as it is only one gene, Rpl34.
 
 ```{r step 6 - modules part 1 (heatmap)}
 library(tidyverse)
@@ -390,34 +388,26 @@ h3 <- heatmap.2(myModule3,
 
 ## GO enrichment
 
-GO enrichment for differentially expressed genes
+GO enrichment for differentially expressed genes was completed using ([gprofiler2](doi:10.12688/f1000research.24956.2). The following gostplots are shown in the same order as the module heatmaps above. The last module, containing Rpl34, is also shown. final bubbleplot contains selected GO terms for each genotype.
 
 ```{r step 7 - functionalEnrichment part 1 (gostplot for upregulated genes)}
 library(tidyverse)
-library(limma)
 library(gplots) #for heatmaps
-library(DT) #interactive and searchable tables of our GSEA results
-library(GSEABase) #functions and methods for Gene Set Enrichment Analysis
-library(Biobase) #base functions for bioconductor; required by GSEABase
-library(GSVA) #Gene Set Variation Analysis, a non-parametric and unsupervised method for estimating variation of gene set enrichment across samples.
 library(gprofiler2) #tools for accessing the GO enrichment results using g:Profiler web resources
-#You need this package "Patchwork" from https://github.com/thomasp85/patchwork , there is another Patchwork package that will not work with the following packages, and it may be installed by them, by mistake. 
-library(clusterProfiler) # provides a suite of tools for functional enrichment analysis
-library(msigdbr) # access to msigdb collections directly within R
-library(enrichplot) # great for making the standard GSEA enrichment plots
+#You need this package "Patchwork" from https://github.com/thomasp85/patchwork , there is another Patchwork package that will not work with the following packages, and it may be installed by them, by mistake.
 
 gost.res_up1 <- gost(rownames(myModule1), organism = "mmusculus", correction_method = "fdr")
-gostplot(gost.res_up1, interactive = F, capped = F) #set interactive=FALSE to get plot for publications
+gostplot(gost.res_up1, interactive = F, capped = F) #set interactive=TRUE to see each GO term
 
 
 gost.res_up2 <- gost(rownames(myModule2), organism = "mmusculus", correction_method = "fdr")
-gostplot(gost.res_up2, interactive = F, capped = F) #set interactive=FALSE to get plot for publications
+gostplot(gost.res_up2, interactive = F, capped = F) #set interactive=TRUE to see each GO term
 
 gost.res_up3 <- gost(rownames(myModule3), organism = "mmusculus", correction_method = "fdr")
-gostplot(gost.res_up3, interactive = F, capped = F) #set interactive=FALSE to get plot for publications
+gostplot(gost.res_up3, interactive = F, capped = F) #set interactive=TRUE to see each GO term
 
 gost.res_up4 <- gost(rownames(myModule4), organism = "mmusculus", correction_method = "fdr")
-gostplot(gost.res_up4, interactive = F, capped = T) #set interactive=FALSE to get plot for publications
+gostplot(gost.res_up4, interactive = F, capped = T) #set interactive=TRUE to see each GO term
 
 
 gtdown.datatable <- gost.res_up1$result %>%
@@ -456,7 +446,7 @@ ggplot(select.table) +
 
 ```
 
-Heatmaps of Selected GO Enrichment
+Heatmaps of Selected GO Enrichment terms
 
 ```{r}
 library(tidyverse)
@@ -568,18 +558,9 @@ hm5map <- heatmap.2(hm5,
 
 ------------------------------------------------------------------------
 
-## Conclusions
-
-Describe the results in your own words. Some things to think about:
-
--   What are the key takeaways from the analysis?
--   What types of analyses would you want to do next?
--   Based on your analysis, are there any wet-lab experiments would might priortize?
--   How could you expand on or otherwise enhance this Rmarkdown report?
-
 ## Session info
 
-The output from running 'sessionInfo' is shown below and details all packages and version necessary to reproduce the results in this report.
+The following output details all packages, with versions, used to reporduce the results of this report. 
 
 ```{r session info}
 sessionInfo()
