@@ -388,7 +388,7 @@ h3 <- heatmap.2(myModule3,
 
 ## GO enrichment
 
-GO enrichment for differentially expressed genes was completed using [gprofiler2](doi:10.12688/f1000research.24956.2). The following gostplots are shown in the same order as the module heatmaps above. The last module, containing Rpl34, is also shown. final bubbleplot contains selected GO terms for each genotype.
+GO enrichment for differentially expressed genes was completed using [gprofiler2](https://doi.org/10.12688/f1000research.24956.2). The following gostplots are shown in the same order as the module heatmaps above. The last module, containing Rpl34, is also shown. final bubbleplot contains selected GO terms for each genotype.
 
 ```{r step 7 - functionalEnrichment part 1 (gostplot for upregulated genes)}
 library(tidyverse)
