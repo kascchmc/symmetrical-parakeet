@@ -145,7 +145,7 @@ log2.cpm.filtered.norm.df.pivot <- pivot_longer(log2.cpm.filtered.norm.df, # dat
                                                 cols = Polr_2048_1:Polr_2138_7, # column names to be stored as a SINGLE variable
                                                 names_to = "samples", # name of that new variable (column)
                                                 values_to = "expression") # name of new variable (column) storing all the values (data)
-#write.csv(log2.cpm.filtered.df.pivot, "Filtered and Normalized Expression")
+#write.csv(log2.cpm.filtered.df.pivot, "Filtered and Normalized Expression.csv")
 
 p3 <- ggplot(log2.cpm.filtered.norm.df.pivot) +
   aes(x=samples, y=expression, fill=samples) +
