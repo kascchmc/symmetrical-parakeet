@@ -329,7 +329,6 @@ Pearson correlation was used to cluster **`r nrow(diffGenes)`** differentially e
 library(tidyverse)
 library(gplots)
 library(RColorBrewer)
-library(ggpubr)
 library(ggplot2)
 
 myheatcolors <- rev(brewer.pal(name="RdBu", n=11))
@@ -563,7 +562,7 @@ hm5map <- heatmap.2(hm5,
 
 ## Session info
 
-The following output details all packages, with versions, used to reporduce the results of this report. 
+The following output details all packages, with versions, used to reproduce the results of this report. 
 
 ```{r session info}
 sessionInfo()
