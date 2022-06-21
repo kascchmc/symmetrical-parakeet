@@ -452,7 +452,6 @@ Heatmaps of Selected GO Enrichment terms
 
 ```{r}
 library(tidyverse)
-library(ComplexHeatmap)
 library(RColorBrewer)
 library(gplots)
 library(stringr)
