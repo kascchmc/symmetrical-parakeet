@@ -5,8 +5,13 @@
 # Then type './readMapping.sh' (without the quotes) at the prompt.  
 # This will begin the process of running each line of code in the shell script.
 
+# first use fastqc to check the quality of our fastq files:
+fastqc *.gz -t 4
+
 # Build an index from our reference fasta file 
 # The reference file used to create an index was "Mus_musculus.GRCm39.cdna.all.fa.gz" from here: http://ftp.ensembl.org/pub/release-106/fasta/mus_musculus/cdna/
+
+kallisto index -i Mus_musculus.GRCm39.cdna.all.index Mus_musculus.GRCm39.cdna.all.fa.gz
 
 # now map reads to the indexed reference host transcriptome
 # use as many 'threads' as your machine will allow in order to speed up the read mapping process.
